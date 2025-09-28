@@ -2268,6 +2268,68 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 	end
 
+	-- threading decompiler
+	local MAX_THREADS = 10
+	local activeThreads = 0
+	local debugMsg = Instance.new("Message", workspace)
+	debugMsg.Text = "Starting decompile..."
+
+	for index, script in pairs(getscripts()) do
+		while activeThreads >= MAX_THREADS do
+			task.wait()
+		end
+
+		activeThreads += 1
+		task.spawn(function()
+			local s, bytecode = getbytecode(script)
+			if not s then
+				activeThreads -= 1
+				return
+			end
+
+			if not bytecode or bytecode == "" then
+				activeThreads -= 1
+				return
+			end
+
+			local maxRetry = 3
+			local attempt = 0
+			local success, source
+
+			repeat
+				attempt += 1
+				debugMsg.Text = "Decompiling: " .. tostring(script) .. " (Attempt " .. attempt .. ")"
+				success, source = pcall(getgenv().decompile or function() end, script)
+				if not success or not source then
+					task.wait(0.5)
+				end
+			until (success and source) or attempt >= maxRetry
+
+			if success and source then
+				source = "-- cache\n"
+				local hashed_bytecode = sha384(bytecode)
+				ldeccache[hashed_bytecode] = source
+				debugMsg.Text = "Success: " .. tostring(script) .. " after " .. attempt .. " attempt(s)"
+			else
+				warn(string.format("Failed to decompile %s after %d tries", tostring(script), attempt))
+				debugMsg.Text = "Failed: " .. tostring(script) .. " after " .. attempt .. " tries"
+			end
+
+			activeThreads -= 1
+		end)
+	end
+
+	local function waitForAll()
+		while activeThreads > 0 do
+			task.wait()
+		end
+	end
+
+	waitForAll()
+	debugMsg.Text = "All scripts processed!"
+
+
+
 	do
 		local Decompiler = decompile --OPTIONS.decomptype == "custom" and custom_decompiler or decompile or custom_decompiler
 
