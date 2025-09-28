@@ -2271,10 +2271,14 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	-- threading decompiler
 	local MAX_THREADS = 10
 	local activeThreads = 0
+	local scriptsList = getscripts()
+	local totalScripts = #scriptsList
+	local currentCount = 0
+
 	local debugMsg = Instance.new("Message", workspace)
 	debugMsg.Text = "Starting decompile..."
 
-	for index, script in pairs(getscripts()) do
+	for index, script in ipairs(scriptsList) do
 		while activeThreads >= MAX_THREADS do
 			task.wait()
 		end
@@ -2292,13 +2296,22 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				return
 			end
 
+			local hashed_bytecode = sha384(bytecode)
+			if ldeccache[hashed_bytecode] then
+				currentCount += 1
+				debugMsg.Text = string.format("Skipped %d/%d : %s", currentCount, totalScripts, tostring(script))
+				activeThreads -= 1
+				return
+			end
+
 			local maxRetry = 3
 			local attempt = 0
 			local success, source
 
 			repeat
 				attempt += 1
-				debugMsg.Text = "Decompiling: " .. tostring(script) .. " (Attempt " .. attempt .. ")"
+				debugMsg.Text = string.format("Decompiling %d/%d : %s (Attempt %d)",
+					index, totalScripts, tostring(script), attempt)
 				success, source = pcall(getgenv().decompile or function() end, script)
 				if not success or not source then
 					task.wait(0.5)
@@ -2306,13 +2319,13 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			until (success and source) or attempt >= maxRetry
 
 			if success and source then
-				source = "-- cache\n"
-				local hashed_bytecode = sha384(bytecode)
 				ldeccache[hashed_bytecode] = source
-				debugMsg.Text = "Success: " .. tostring(script) .. " after " .. attempt .. " attempt(s)"
+				currentCount += 1
+				debugMsg.Text = string.format("Done %d/%d : %s", currentCount, totalScripts, tostring(script))
 			else
+				currentCount += 1
 				warn(string.format("Failed to decompile %s after %d tries", tostring(script), attempt))
-				debugMsg.Text = "Failed: " .. tostring(script) .. " after " .. attempt .. " tries"
+				debugMsg.Text = string.format("Failed %d/%d : %s", currentCount, totalScripts, tostring(script))
 			end
 
 			activeThreads -= 1
@@ -2327,7 +2340,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	waitForAll()
 	debugMsg.Text = "All scripts processed!"
-
 
 
 	do
