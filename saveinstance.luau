@@ -2269,7 +2269,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	-- threading decompiler
-	local MAX_THREADS = 10
+	local MAX_THREADS = _G.MAX_THREADS or 10
 	local activeThreads = 0
 	local scriptsList = getscripts()
 	local totalScripts = #scriptsList
@@ -2304,7 +2304,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				return
 			end
 
-			local maxRetry = 3
+			local maxRetry = _G.MAX_RETRY or 3
 			local attempt = 0
 			local success, source
 
